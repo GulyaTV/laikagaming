@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Laika Cloud Gaming</title>
+  <title>Laika Cloud NES</title>
   <style>
     body {
       font-family: sans-serif;
@@ -19,15 +19,52 @@
       background: black;
       margin-top: 1rem;
     }
-    input {
+    input, select, button {
+      margin: 0.5rem;
+    }
+    #controls {
       margin-top: 1rem;
+    }
+    #instructions {
+      display: none;
+      margin-top: 1rem;
+      background: #222;
+      padding: 1rem;
+      border-radius: 8px;
+      text-align: left;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
     }
   </style>
 </head>
 <body>
-  <h1>Laika Cloud Gaming</h1>
-  <input type="file" id="romUploader" accept=".nes" />
+  <h1>Laika Cloud NES</h1>
+  <div>
+    <select id="romSelect">
+      <option disabled selected>Select a game</option>
+      <option value="https://www.emu-land.net/consoles/dendy/roms?act=getmfl&id=1437&fid=11482">Super Mario Bros</option>
+      <option value="https://www.emu-land.net/consoles/dendy/roms?act=getmfl&id=279&fid=12141">Contra</option>
+      <option value="https://www.emu-land.net/consoles/dendy/roms?act=getmfl&id=922&fid=10390">Mega Man 2</option>
+    </select>
+    <input type="file" id="romUploader" accept=".nes" />
+  </div>
+  <div id="controls">
+    <button id="pauseBtn">Pause</button>
+    <button id="restartBtn">Restart</button>
+  </div>
   <canvas id="screen" width="256" height="240"></canvas>
+
+  <div id="instructions">
+    <h3>Управление на клавиатуре:</h3>
+    <ul>
+      <li>Стрелки — перемещение</li>
+      <li>Z — кнопка A</li>
+      <li>X — кнопка B</li>
+      <li>Enter — START</li>
+      <li>Shift — SELECT</li>
+    </ul>
+  </div>
 
   <!-- Подключаем jsnes через CDN -->
   <script src="https://unpkg.com/jsnes/dist/jsnes.min.js"></script>
@@ -40,16 +77,38 @@
     const nes = new jsnes.NES({
       onFrame: function(frameBuffer) {
         for (let i = 0; i < frameBuffer.length; i++) {
-          imageData.data[i * 4 + 0] = (frameBuffer[i] >> 16) & 0xFF; // R
-          imageData.data[i * 4 + 1] = (frameBuffer[i] >> 8) & 0xFF;  // G
-          imageData.data[i * 4 + 2] = frameBuffer[i] & 0xFF;         // B
-          imageData.data[i * 4 + 3] = 0xFF;                          // A
+          imageData.data[i * 4 + 0] = (frameBuffer[i] >> 16) & 0xFF;
+          imageData.data[i * 4 + 1] = (frameBuffer[i] >> 8) & 0xFF;
+          imageData.data[i * 4 + 2] = frameBuffer[i] & 0xFF;
+          imageData.data[i * 4 + 3] = 0xFF;
         }
         ctx.putImageData(imageData, 0, 0);
       },
       onStatusUpdate: console.log,
       emulateSound: true,
     });
+
+    let frameInterval;
+    function startEmulation() {
+      if (frameInterval) clearInterval(frameInterval);
+      frameInterval = setInterval(() => nes.frame(), 1000 / 60);
+      document.getElementById('instructions').style.display = 'block';
+    }
+
+    function pauseEmulation() {
+      if (frameInterval) {
+        clearInterval(frameInterval);
+        frameInterval = null;
+      }
+    }
+
+    function restartEmulation() {
+      pauseEmulation();
+      if (currentRomData) {
+        nes.loadROM(currentRomData);
+        startEmulation();
+      }
+    }
 
     const playerKeys = {
       ArrowUp: 'UP',
@@ -73,14 +132,49 @@
       }
     });
 
+    let currentRomData = null;
+
     document.getElementById('romUploader').addEventListener('change', function(e) {
-      const reader = new FileReader();
-      reader.onload = function() {
-        nes.loadROM(reader.result);
-        nes.start();
-      };
-      reader.readAsBinaryString(e.target.files[0]);
+      if (e.target.files && e.target.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function() {
+          // преобразуем ArrayBuffer в строку
+          const bytes = new Uint8Array(reader.result);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          currentRomData = binary;
+          nes.loadROM(currentRomData);
+          startEmulation();
+        };
+        reader.readAsArrayBuffer(e.target.files[0]);
+      } else {
+        console.error("No file selected.");
+      }
     });
+
+    document.getElementById('romSelect').addEventListener('change', async function(e) {
+      const url = e.target.value;
+      const response = await fetch(url);
+      const arrayBuffer = await response.arrayBuffer();
+      const binary = new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '');
+      currentRomData = binary;
+      nes.loadROM(currentRomData);
+      startEmulation();
+    });
+
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+      if (frameInterval) {
+        pauseEmulation();
+        document.getElementById('pauseBtn').textContent = 'Resume';
+      } else {
+        startEmulation();
+        document.getElementById('pauseBtn').textContent = 'Pause';
+      }
+    });
+
+    document.getElementById('restartBtn').addEventListener('click', restartEmulation);
   </script>
 </body>
 </html>
