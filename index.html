@@ -57,13 +57,57 @@
 
   <div id="instructions">
     <h3>Управление на клавиатуре:</h3>
-    <ul>
-      <li>Стрелки — перемещение</li>
-      <li>Z — кнопка A</li>
-      <li>X — кнопка B</li>
-      <li>Enter — START</li>
-      <li>Shift — SELECT</li>
-    </ul>
+    <table>
+      <thead>
+        <tr>
+          <th>Кнопка</th>
+          <th>Игрок 1 (клавиатура)</th>
+          <th>Игрок 2 (клавиатура)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Left</td>
+          <td>ArrowLeft</td>
+          <td>NumPad 4</td>
+        </tr>
+        <tr>
+          <td>Right</td>
+          <td>ArrowRight</td>
+          <td>NumPad 6</td>
+        </tr>
+        <tr>
+          <td>Up</td>
+          <td>ArrowUp</td>
+          <td>NumPad 8</td>
+        </tr>
+        <tr>
+          <td>Down</td>
+          <td>ArrowDown</td>
+          <td>NumPad 2</td>
+        </tr>
+        <tr>
+          <td>A</td>
+          <td>X</td>
+          <td>NumPad 7</td>
+        </tr>
+        <tr>
+          <td>B</td>
+          <td>Z</td>
+          <td>NumPad 9</td>
+        </tr>
+        <tr>
+          <td>Start</td>
+          <td>Enter</td>
+          <td>NumPad 1</td>
+        </tr>
+        <tr>
+          <td>Select</td>
+          <td>Right Ctrl</td>
+          <td>NumPad 3</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <!-- Подключаем jsnes через CDN -->
@@ -110,27 +154,61 @@
       }
     }
 
-    const playerKeys = {
-      ArrowUp: 'UP',
-      ArrowDown: 'DOWN',
+    const player1Keys = {
       ArrowLeft: 'LEFT',
       ArrowRight: 'RIGHT',
-      z: 'A',
-      x: 'B',
+      ArrowUp: 'UP',
+      ArrowDown: 'DOWN',
+      x: 'A',
+      z: 'B',
       Enter: 'START',
-      Shift: 'SELECT'
+      ControlRight: 'SELECT',
     };
 
-    document.addEventListener('keydown', (e) => {
-      if (playerKeys[e.key]) {
-        nes.buttonDown(1, jsnes.Controller[`BUTTON_${playerKeys[e.key]}`]);
+    const player2Keys = {
+      'Numpad4': 'LEFT',
+      'Numpad6': 'RIGHT',
+      'Numpad8': 'UP',
+      'Numpad2': 'DOWN',
+      'Numpad7': 'A',
+      'Numpad9': 'B',
+      'Numpad1': 'START',
+      'Numpad3': 'SELECT',
+    };
+
+    function handleKeyDown(e) {
+      if (!nes) return;
+      const key = e.key;
+      let button = player1Keys[key];
+      let player = 1;
+      if (!button) {
+        button = player2Keys[key];
+        player = 2;
       }
-    });
-    document.addEventListener('keyup', (e) => {
-      if (playerKeys[e.key]) {
-        nes.buttonUp(1, jsnes.Controller[`BUTTON_${playerKeys[e.key]}`]);
+      if (button) {
+        nes.buttonDown(player, jsnes.Controller['BUTTON_' + button]);
+        // Предотвращаем скролл для стрелок и управления
+        e.preventDefault();
       }
-    });
+    }
+
+    function handleKeyUp(e) {
+      if (!nes) return;
+        const key = e.key;
+        let button = player1Keys[key];
+        let player = 1;
+        if (!button) {
+          button = player2Keys[key];
+          player = 2;
+        }
+        if (button) {
+          nes.buttonUp(player, jsnes.Controller['BUTTON_' + button]);
+          e.preventDefault();
+        }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
 
     let currentRomData = null;
 
@@ -153,6 +231,7 @@
         console.error("No file selected.");
       }
     });
+    
 
     document.getElementById('romSelect').addEventListener('change', async function(e) {
       const url = e.target.value;
