@@ -1,69 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>LaikaGaming</title>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Laika Cloud Gaming</title>
   <style>
-    body { font-family: sans-serif; background: #1e1e1e; color: white; padding: 2em; }
-    .game-list { display: flex; flex-wrap: wrap; gap: 1em; }
-    .game-card { background: #333; padding: 1em; border-radius: 8px; cursor: pointer; }
-    input, button { padding: 0.5em; margin-top: 1em; }
+    body {
+      font-family: sans-serif;
+      background: #111;
+      color: #fff;
+      text-align: center;
+      padding: 1rem;
+    }
+    canvas {
+      image-rendering: pixelated;
+      width: 512px;
+      height: 480px;
+      background: black;
+      margin-top: 1rem;
+    }
+    input {
+      margin-top: 1rem;
+    }
   </style>
 </head>
 <body>
-  <h1>🎮 LaikaGaming</h1>
+  <h1>Laika Cloud Gaming</h1>
+  <input type="file" id="romUploader" accept=".nes" />
+  <canvas id="screen" width="256" height="240"></canvas>
 
-  <div id="login">
-    <input id="username" placeholder="Enter username...">
-    <button onclick="login()">Login</button>
-  </div>
-
-  <div id="games" style="display:none">
-    <h2>Welcome, <span id="userDisplay"></span>!</h2>
-    <div class="game-list" id="gameList"></div>
-  </div>
+  <!-- Подключаем jsnes через CDN -->
+  <script src="https://unpkg.com/jsnes/dist/jsnes.min.js"></script>
 
   <script>
-    let username = null;
-    let sessionId = null;
+    const canvas = document.getElementById('screen');
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, 256, 240);
 
-    async function login() {
-      username = document.getElementById('username').value;
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({username})
-      });
-      const data = await res.json();
-      sessionId = data.session_id;
-      document.getElementById('login').style.display = 'none';
-      document.getElementById('games').style.display = 'block';
-      document.getElementById('userDisplay').textContent = username;
-      loadGames();
-    }
+    const nes = new jsnes.NES({
+      onFrame: function(frameBuffer) {
+        for (let i = 0; i < frameBuffer.length; i++) {
+          imageData.data[i * 4 + 0] = (frameBuffer[i] >> 16) & 0xFF; // R
+          imageData.data[i * 4 + 1] = (frameBuffer[i] >> 8) & 0xFF;  // G
+          imageData.data[i * 4 + 2] = frameBuffer[i] & 0xFF;         // B
+          imageData.data[i * 4 + 3] = 0xFF;                          // A
+        }
+        ctx.putImageData(imageData, 0, 0);
+      },
+      onStatusUpdate: console.log,
+      emulateSound: true,
+    });
 
-    async function loadGames() {
-      const res = await fetch('/api/games');
-      const games = await res.json();
-      const container = document.getElementById('gameList');
-      container.innerHTML = '';
-      for (const g of games) {
-        const div = document.createElement('div');
-        div.className = 'game-card';
-        div.textContent = `${g.console.toUpperCase()}: ${g.rom}`;
-        div.onclick = () => startGame(g.console, g.rom);
-        container.appendChild(div);
+    const playerKeys = {
+      ArrowUp: 'UP',
+      ArrowDown: 'DOWN',
+      ArrowLeft: 'LEFT',
+      ArrowRight: 'RIGHT',
+      z: 'A',
+      x: 'B',
+      Enter: 'START',
+      Shift: 'SELECT'
+    };
+
+    document.addEventListener('keydown', (e) => {
+      if (playerKeys[e.key]) {
+        nes.buttonDown(1, jsnes.Controller[`BUTTON_${playerKeys[e.key]}`]);
       }
-    }
+    });
+    document.addEventListener('keyup', (e) => {
+      if (playerKeys[e.key]) {
+        nes.buttonUp(1, jsnes.Controller[`BUTTON_${playerKeys[e.key]}`]);
+      }
+    });
 
-    async function startGame(console, rom) {
-      await fetch('/api/start_game', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({username, rom, console})
-      });
-      alert('Game started! Switch to streaming tab or client.');
-    }
+    document.getElementById('romUploader').addEventListener('change', function(e) {
+      const reader = new FileReader();
+      reader.onload = function() {
+        nes.loadROM(reader.result);
+        nes.start();
+      };
+      reader.readAsBinaryString(e.target.files[0]);
+    });
   </script>
 </body>
 </html>
